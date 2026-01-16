@@ -6,7 +6,7 @@ import pandas as pd
 
 BASE_URL = os.getenv("MEXC_CONTRACT_BASE_URL", "https://contract.mexc.com/api/v1")
 
-TIMEFRAME = os.getenv("TIMEFRAME", "2h")  # "2h", "1h", "4h", "1d"
+TIMEFRAME = os.getenv("TIMEFRAME", "2h")  # "1h", "2h", "4h", "1d"
 SHORT_MA = int(os.getenv("SHORT_MA", "20"))
 LONG_MA = int(os.getenv("LONG_MA", "50"))
 MA_TYPE = os.getenv("MA_TYPE", "ema").lower()  # ema|sma
@@ -16,6 +16,7 @@ TOP_N_OUTPUT = int(os.getenv("TOP_N_OUTPUT", "30"))
 OHLCV_LIMIT = int(os.getenv("OHLCV_LIMIT", "300"))
 
 QUOTE = os.getenv("QUOTE", "USDT")
+DEBUG = os.getenv("DEBUG", "0") == "1"
 
 
 def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
@@ -26,7 +27,7 @@ def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
     raise ValueError("MA_TYPE deve ser 'ema' ou 'sma'")
 
 
-def http_get_json(url, params=None, tries=3, timeout=20):
+def http_get_json(url, params=None, tries=3, timeout=25):
     last = None
     for i in range(tries):
         try:
@@ -40,10 +41,6 @@ def http_get_json(url, params=None, tries=3, timeout=20):
 
 
 def extract_volume_like(item: dict):
-    """
-    Tenta achar um campo de 'volume notional 24h' para rankear.
-    A MEXC pode variar nomes conforme endpoint/versão.
-    """
     keys = [
         "amount24", "turnover24", "quoteVolume", "quoteVol",
         "vol24", "volume24", "volume", "amount"
@@ -61,12 +58,12 @@ def extract_volume_like(item: dict):
 
 def get_top_usdt_perps(n=80):
     """
-    Endpoint público de tickers (contratos).
+    Pega tickers de perps e ordena por volume (quando disponível).
+    Se não achar volume, faz fallback pegando os primeiros N.
     """
     url = f"{BASE_URL}/contract/ticker"
     data = http_get_json(url)
 
-    # tenta achar a lista
     tickers = None
     if isinstance(data, dict):
         tickers = data.get("data") or data.get("datas") or data.get("ticker") or data.get("result")
@@ -77,52 +74,58 @@ def get_top_usdt_perps(n=80):
         raise RuntimeError(f"Formato inesperado em ticker: {data}")
 
     rows = []
+    fallback_syms = []
     for t in tickers:
         if not isinstance(t, dict):
             continue
-
         sym = t.get("symbol") or t.get("contractId") or t.get("name")
         if not sym:
             continue
 
-        # MEXC perps normalmente vem tipo "BTC_USDT"
-        if QUOTE and (f"_{QUOTE}" not in sym):
+        # contratos MEXC normalmente: "BTC_USDT"
+        if not sym.endswith(f"_{QUOTE}"):
             continue
+
+        fallback_syms.append(sym)
 
         v = extract_volume_like(t)
         if v is None:
-            continue
-
-        rows.append((sym, v))
+            v = 0.0  # se não veio volume, ainda deixa entrar no ranking
+        rows.append((sym, float(v)))
 
     rows.sort(key=lambda x: x[1], reverse=True)
+
+    if not rows and fallback_syms:
+        return fallback_syms[:n]
+
     return [s for s, _ in rows[:n]]
 
 
 def timeframe_to_mexc_interval_and_resample(tf: str):
-    """
-    Retorna (intervalo_base_mexc, regra_resample_pandas_ou_None).
-    Para 2h: puxa 1h e agrega para 2h.
-    """
     tf = tf.lower().strip()
     if tf == "1h":
-        return "Min60", None
+        return "Min60", None, 1
     if tf == "2h":
-        return "Min60", "2H"
+        # vamos puxar 1h e reagrupar em 2h
+        return "Min60", "2H", 2
     if tf == "4h":
-        return "Hour4", None
-    if tf in ("1d", "d", "day", "day1"):
-        return "Day1", None
+        return "Hour4", None, 1
+    if tf in ("1d", "d"):
+        return "Day1", None, 1
     raise ValueError("TIMEFRAME suportado: 1h, 2h, 4h, 1d")
 
 
+def to_datetime_auto(ts_series: pd.Series) -> pd.Series:
+    """
+    Detecta se timestamp está em segundos ou ms pelo tamanho e converte.
+    """
+    s = pd.to_numeric(ts_series, errors="coerce")
+    # se a maioria for < 1e12, provavelmente é segundos (10 dígitos)
+    unit = "s" if s.dropna().median() < 1e12 else "ms"
+    return pd.to_datetime(s, unit=unit, utc=True)
+
+
 def parse_kline_to_df(payload):
-    """
-    Tenta suportar alguns formatos comuns:
-    - lista de listas: [ts, open, high, low, close, vol]
-    - lista de dicts: {"time":..., "open":...}
-    - dict com arrays: {"time":[...], "open":[...], ...}
-    """
     if isinstance(payload, dict):
         data = payload.get("data") or payload.get("datas") or payload.get("result")
     else:
@@ -131,7 +134,7 @@ def parse_kline_to_df(payload):
     if data is None:
         raise RuntimeError(f"Resposta sem data: {payload}")
 
-    # dict com arrays
+    # formato dict com arrays
     if isinstance(data, dict) and "time" in data:
         df = pd.DataFrame({
             "ts": data["time"],
@@ -141,19 +144,20 @@ def parse_kline_to_df(payload):
             "close": data.get("close"),
             "volume": data.get("vol") or data.get("volume"),
         })
-    # lista
+
+    # formato lista
     elif isinstance(data, list):
         if len(data) == 0:
             return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
 
         first = data[0]
-        if isinstance(first, list) or isinstance(first, tuple):
-            df = pd.DataFrame(data, columns=["ts", "open", "high", "low", "close", "volume"][:len(first)])
-            # se vier mais colunas, ignora
-            df = df[["ts", "open", "high", "low", "close", "volume"]]
+        if isinstance(first, (list, tuple)):
+            df = pd.DataFrame(data)
+            # tenta mapear os 6 primeiros campos: ts,o,h,l,c,v
+            df = df.iloc[:, :6]
+            df.columns = ["ts", "open", "high", "low", "close", "volume"]
         elif isinstance(first, dict):
             df = pd.DataFrame(data)
-            # normaliza nomes comuns
             rename = {}
             for a, b in [("time", "ts"), ("timestamp", "ts"), ("t", "ts"),
                          ("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"),
@@ -164,11 +168,11 @@ def parse_kline_to_df(payload):
             df = df[["ts", "open", "high", "low", "close", "volume"]]
         else:
             raise RuntimeError(f"Formato de kline inesperado: {first}")
+
     else:
         raise RuntimeError(f"Formato de kline inesperado: {type(data)}")
 
-    # tipos
-    df["ts"] = pd.to_datetime(pd.to_numeric(df["ts"], errors="coerce"), unit="ms", utc=True)
+    df["ts"] = to_datetime_auto(df["ts"])
     for c in ["open", "high", "low", "close", "volume"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
@@ -177,23 +181,23 @@ def parse_kline_to_df(payload):
 
 
 def fetch_ohlcv(symbol: str, tf: str, limit: int):
-    interval, resample_rule = timeframe_to_mexc_interval_and_resample(tf)
+    interval, resample_rule, factor = timeframe_to_mexc_interval_and_resample(tf)
 
-    end_ms = int(time.time() * 1000)
-
-    # intervalo base em ms para estimar start
-    interval_ms = {
-        "Min60": 60 * 60 * 1000,
-        "Hour4": 4 * 60 * 60 * 1000,
-        "Day1": 24 * 60 * 60 * 1000,
+    # IMPORTANTÍSSIMO: muitos endpoints usam start/end em SEGUNDOS
+    end_s = int(time.time())
+    interval_s = {
+        "Min60": 60 * 60,
+        "Hour4": 4 * 60 * 60,
+        "Day1": 24 * 60 * 60,
     }[interval]
 
-    start_ms = end_ms - int(limit * interval_ms * 1.2)
+    base_limit = int(limit * factor)
+    start_s = end_s - int(base_limit * interval_s * 1.3)
 
     url = f"{BASE_URL}/contract/kline/{symbol}"
-    params = {"interval": interval, "start": start_ms, "end": end_ms}
-    payload = http_get_json(url, params=params)
+    params = {"interval": interval, "start": start_s, "end": end_s}
 
+    payload = http_get_json(url, params=params)
     df = parse_kline_to_df(payload)
 
     if resample_rule:
@@ -206,7 +210,6 @@ def fetch_ohlcv(symbol: str, tf: str, limit: int):
             volume=("volume", "sum"),
         ).dropna(subset=["close"]).reset_index()
 
-    # mantém só os últimos limit
     return df.tail(limit)
 
 
@@ -215,11 +218,19 @@ def main():
 
     symbols = get_top_usdt_perps(TOP_PERPS)
     print(f"[info] símbolos selecionados: {len(symbols)}")
+    if DEBUG and symbols:
+        print("[debug] exemplo símbolos:", symbols[:5])
 
     results = []
-    for sym in symbols:
+    first_error = None
+
+    for i, sym in enumerate(symbols):
         try:
             df = fetch_ohlcv(sym, TIMEFRAME, OHLCV_LIMIT)
+
+            if DEBUG and i == 0:
+                print(f"[debug] {sym} candles retornados: {len(df)} | de {df['ts'].iloc[0]} até {df['ts'].iloc[-1]}")
+
             if len(df) < LONG_MA + 5:
                 continue
 
@@ -230,6 +241,9 @@ def main():
             last_close = float(close.iloc[-1])
             last_ma_s = float(ma_s.iloc[-1])
             last_ma_l = float(ma_l.iloc[-1])
+
+            if pd.isna(last_ma_s) or pd.isna(last_ma_l) or last_ma_l == 0:
+                continue
 
             ma_dist_pct = (last_ma_s - last_ma_l) / last_ma_l * 100.0
 
@@ -250,7 +264,10 @@ def main():
                 f"{MA_TYPE}{LONG_MA}": last_ma_l,
                 "ma_dist_pct": ma_dist_pct,
             })
-        except Exception:
+
+        except Exception as e:
+            if first_error is None:
+                first_error = (sym, e)
             continue
 
     cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
@@ -258,6 +275,13 @@ def main():
 
     bullish_df = out[out["trend"] == "ALTA"].sort_values("ma_dist_pct", ascending=False)
     bearish_df = out[out["trend"] == "BAIXA"].sort_values("ma_dist_pct", ascending=True)
+
+    print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
+
+    if first_error is not None and DEBUG:
+        sym, e = first_error
+        print("[debug] primeiro erro capturado em", sym, "->", repr(e))
+        traceback.print_exc()
 
     print("\n=== ALTA (ordenado por distância % entre MAs) ===")
     print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
@@ -271,9 +295,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print("[fatal]", repr(e))
-        traceback.print_exc()
-        raise
+    main()
