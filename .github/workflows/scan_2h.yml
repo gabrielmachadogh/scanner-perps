@@ -28,6 +28,7 @@ jobs:
           SHORT_MA: "20"
           LONG_MA: "50"
           MA_TYPE: ema
+          DEBUG: "1"
 
 
       - name: Upload CSVs
