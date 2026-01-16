@@ -33,6 +33,19 @@ jobs:
           MA_TYPE: sma
           DEBUG: "0"
 
+      - name: Save results to repo (commit)
+        run: |
+          mkdir -p results
+          cp scanner_alta.csv results/scanner_alta.csv
+          cp scanner_baixa.csv results/scanner_baixa.csv
+          cp scanner_resultado_completo.csv results/scanner_resultado_completo.csv
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add results/*.csv
+          git commit -m "update scan results" || echo "no changes"
+          git push
 
       - name: Upload CSVs
         uses: actions/upload-artifact@v4
