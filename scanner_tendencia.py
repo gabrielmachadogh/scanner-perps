@@ -116,6 +116,16 @@ def bars_per_day(tf: str) -> int:
     return 1
 
 
+def format_millions(x) -> str:
+    try:
+        x = float(x)
+    except Exception:
+        return ""
+    m = x / 1_000_000.0
+    # sem casas decimais, como nos exemplos: 22M, 117M...
+    return f"{int(round(m))}M"
+
+
 def to_datetime_auto(ts_series: pd.Series) -> pd.Series:
     s = pd.to_numeric(ts_series, errors="coerce")
     unit = "s" if s.dropna().median() < 1e12 else "ms"
