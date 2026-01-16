@@ -1,28 +1,21 @@
 import os
 import time
 import traceback
-import ccxt
+import requests
 import pandas as pd
 
-# =========================
-# CONFIGURAÇÕES (via env)
-# =========================
-EXCHANGE_ID = os.getenv("EXCHANGE_ID", "bybit")      # ex: bybit, okx, bitget, mexc
-DEFAULT_TYPE = os.getenv("DEFAULT_TYPE", "swap")     # spot | swap | future (depende do exchange)
+BASE_URL = os.getenv("MEXC_CONTRACT_BASE_URL", "https://contract.mexc.com/api/v1")
 
-QUOTE = os.getenv("QUOTE", "USDT")
-TIMEFRAME = os.getenv("TIMEFRAME", "2h")             # ex: 2h, 4h, 1d
-
+TIMEFRAME = os.getenv("TIMEFRAME", "2h")  # "2h", "1h", "4h", "1d"
 SHORT_MA = int(os.getenv("SHORT_MA", "20"))
 LONG_MA = int(os.getenv("LONG_MA", "50"))
-MA_TYPE = os.getenv("MA_TYPE", "ema").lower()        # ema | sma
+MA_TYPE = os.getenv("MA_TYPE", "ema").lower()  # ema|sma
 
-TOP_PERPS = int(os.getenv("TOP_PERPS", "80"))        # top 80 por volume (quando possível)
-TOP_N_OUTPUT = int(os.getenv("TOP_N_OUTPUT", "30"))  # quantos mostrar no print
+TOP_PERPS = int(os.getenv("TOP_PERPS", "80"))
+TOP_N_OUTPUT = int(os.getenv("TOP_N_OUTPUT", "30"))
+OHLCV_LIMIT = int(os.getenv("OHLCV_LIMIT", "300"))
 
-OHLCV_LIMIT = int(os.getenv("OHLCV_LIMIT", "300"))   # histórico; precisa ser > LONG_MA
-LINEAR_ONLY = os.getenv("LINEAR_ONLY", "1") == "1"   # tenta filtrar perps lineares (USDT-margined)
-# =========================
+QUOTE = os.getenv("QUOTE", "USDT")
 
 
 def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
@@ -33,141 +26,200 @@ def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
     raise ValueError("MA_TYPE deve ser 'ema' ou 'sma'")
 
 
-def extract_quote_volume(ticker: dict):
-    """Tenta extrair volume 24h em moeda de cotação (quote) de diferentes formatos."""
-    if not isinstance(ticker, dict):
-        return None
-
-    qv = ticker.get("quoteVolume")
-    if qv is not None:
-        return float(qv)
-
-    info = ticker.get("info") or {}
-
-    # chaves comuns em várias exchanges:
-    for k in ["quoteVolume", "turnover24h", "volCcy24h", "quoteVol", "qVol", "amount24h"]:
-        v = info.get(k)
-        if v is not None:
-            try:
-                return float(v)
-            except Exception:
-                pass
-
-    # fallback: baseVolume * last
-    base_vol = ticker.get("baseVolume")
-    last = ticker.get("last")
-    if base_vol is not None and last is not None:
+def http_get_json(url, params=None, tries=3, timeout=20):
+    last = None
+    for i in range(tries):
         try:
-            return float(base_vol) * float(last)
-        except Exception:
-            return None
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last = e
+            time.sleep(1.5 * (i + 1))
+    raise last
 
+
+def extract_volume_like(item: dict):
+    """
+    Tenta achar um campo de 'volume notional 24h' para rankear.
+    A MEXC pode variar nomes conforme endpoint/versão.
+    """
+    keys = [
+        "amount24", "turnover24", "quoteVolume", "quoteVol",
+        "vol24", "volume24", "volume", "amount"
+    ]
+    for k in keys:
+        v = item.get(k)
+        if v is None:
+            continue
+        try:
+            return float(v)
+        except Exception:
+            pass
     return None
 
 
-def market_is_usdt_perp(market: dict, quote: str) -> bool:
-    """Filtra perps (swap) e tenta manter USDT-margined/linear quando possível."""
-    if not market:
-        return False
-    if not market.get("active", True):
-        return False
-    if not market.get("swap", False):
-        return False
-    if market.get("quote") != quote:
-        return False
-
-    if LINEAR_ONLY:
-        # Alguns exchanges fornecem 'linear' e/ou 'settle'
-        linear = market.get("linear")
-        settle = market.get("settle")
-        if linear is False:
-            return False
-        if settle is not None and settle != quote:
-            return False
-
-    return True
-
-
-def top_perps_by_volume(exchange, quote="USDT", n=80, tries=3):
+def get_top_usdt_perps(n=80):
     """
-    Retorna top N perps por volume (quoteVolume).
-    Se não conseguir volume, faz fallback para 'primeiros N perps ativos'.
+    Endpoint público de tickers (contratos).
     """
-    last_err = None
+    url = f"{BASE_URL}/contract/ticker"
+    data = http_get_json(url)
 
-    # tenta buscar tickers (para ordenar por volume)
-    if exchange.has.get("fetchTickers"):
-        for attempt in range(tries):
-            try:
-                tickers = exchange.fetch_tickers()
-                rows = []
+    # tenta achar a lista
+    tickers = None
+    if isinstance(data, dict):
+        tickers = data.get("data") or data.get("datas") or data.get("ticker") or data.get("result")
+    if tickers is None and isinstance(data, list):
+        tickers = data
 
-                for symbol, t in tickers.items():
-                    m = exchange.markets.get(symbol)
-                    if not market_is_usdt_perp(m, quote):
-                        continue
+    if not isinstance(tickers, list):
+        raise RuntimeError(f"Formato inesperado em ticker: {data}")
 
-                    qv = extract_quote_volume(t)
-                    if qv is None:
-                        continue
+    rows = []
+    for t in tickers:
+        if not isinstance(t, dict):
+            continue
 
-                    rows.append((symbol, qv))
+        sym = t.get("symbol") or t.get("contractId") or t.get("name")
+        if not sym:
+            continue
 
-                rows.sort(key=lambda x: x[1], reverse=True)
+        # MEXC perps normalmente vem tipo "BTC_USDT"
+        if QUOTE and (f"_{QUOTE}" not in sym):
+            continue
 
-                if rows:
-                    return [s for s, _ in rows[:n]]
+        v = extract_volume_like(t)
+        if v is None:
+            continue
 
-                # se não conseguiu nenhum volume, cai no fallback
-                break
+        rows.append((sym, v))
 
-            except Exception as e:
-                last_err = e
-                print(f"[warn] fetch_tickers falhou (tentativa {attempt+1}/{tries}): {repr(e)}")
-                time.sleep(2 * (attempt + 1))
-
-    if last_err is not None:
-        print("[warn] Não consegui tickers/volume. Usando fallback (sem rank por volume).")
-        traceback.print_exception(type(last_err), last_err, last_err.__traceback__)
-
-    # fallback: pega todos os perps elegíveis e corta os N primeiros
-    perps = []
-    for symbol, m in exchange.markets.items():
-        if market_is_usdt_perp(m, quote):
-            perps.append(symbol)
-
-    perps.sort()
-    return perps[:n]
+    rows.sort(key=lambda x: x[1], reverse=True)
+    return [s for s, _ in rows[:n]]
 
 
-def fetch_ohlcv_df(exchange, symbol, timeframe="2h", limit=300) -> pd.DataFrame:
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=["ts", "open", "high", "low", "close", "volume"])
-    df["ts"] = pd.to_datetime(df["ts"], unit="ms")
+def timeframe_to_mexc_interval_and_resample(tf: str):
+    """
+    Retorna (intervalo_base_mexc, regra_resample_pandas_ou_None).
+    Para 2h: puxa 1h e agrega para 2h.
+    """
+    tf = tf.lower().strip()
+    if tf == "1h":
+        return "Min60", None
+    if tf == "2h":
+        return "Min60", "2H"
+    if tf == "4h":
+        return "Hour4", None
+    if tf in ("1d", "d", "day", "day1"):
+        return "Day1", None
+    raise ValueError("TIMEFRAME suportado: 1h, 2h, 4h, 1d")
+
+
+def parse_kline_to_df(payload):
+    """
+    Tenta suportar alguns formatos comuns:
+    - lista de listas: [ts, open, high, low, close, vol]
+    - lista de dicts: {"time":..., "open":...}
+    - dict com arrays: {"time":[...], "open":[...], ...}
+    """
+    if isinstance(payload, dict):
+        data = payload.get("data") or payload.get("datas") or payload.get("result")
+    else:
+        data = payload
+
+    if data is None:
+        raise RuntimeError(f"Resposta sem data: {payload}")
+
+    # dict com arrays
+    if isinstance(data, dict) and "time" in data:
+        df = pd.DataFrame({
+            "ts": data["time"],
+            "open": data.get("open"),
+            "high": data.get("high"),
+            "low": data.get("low"),
+            "close": data.get("close"),
+            "volume": data.get("vol") or data.get("volume"),
+        })
+    # lista
+    elif isinstance(data, list):
+        if len(data) == 0:
+            return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
+
+        first = data[0]
+        if isinstance(first, list) or isinstance(first, tuple):
+            df = pd.DataFrame(data, columns=["ts", "open", "high", "low", "close", "volume"][:len(first)])
+            # se vier mais colunas, ignora
+            df = df[["ts", "open", "high", "low", "close", "volume"]]
+        elif isinstance(first, dict):
+            df = pd.DataFrame(data)
+            # normaliza nomes comuns
+            rename = {}
+            for a, b in [("time", "ts"), ("timestamp", "ts"), ("t", "ts"),
+                         ("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"),
+                         ("v", "volume"), ("vol", "volume")]:
+                if a in df.columns and b not in df.columns:
+                    rename[a] = b
+            df = df.rename(columns=rename)
+            df = df[["ts", "open", "high", "low", "close", "volume"]]
+        else:
+            raise RuntimeError(f"Formato de kline inesperado: {first}")
+    else:
+        raise RuntimeError(f"Formato de kline inesperado: {type(data)}")
+
+    # tipos
+    df["ts"] = pd.to_datetime(pd.to_numeric(df["ts"], errors="coerce"), unit="ms", utc=True)
+    for c in ["open", "high", "low", "close", "volume"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df = df.dropna(subset=["ts", "close"]).sort_values("ts")
     return df
 
 
+def fetch_ohlcv(symbol: str, tf: str, limit: int):
+    interval, resample_rule = timeframe_to_mexc_interval_and_resample(tf)
+
+    end_ms = int(time.time() * 1000)
+
+    # intervalo base em ms para estimar start
+    interval_ms = {
+        "Min60": 60 * 60 * 1000,
+        "Hour4": 4 * 60 * 60 * 1000,
+        "Day1": 24 * 60 * 60 * 1000,
+    }[interval]
+
+    start_ms = end_ms - int(limit * interval_ms * 1.2)
+
+    url = f"{BASE_URL}/contract/kline/{symbol}"
+    params = {"interval": interval, "start": start_ms, "end": end_ms}
+    payload = http_get_json(url, params=params)
+
+    df = parse_kline_to_df(payload)
+
+    if resample_rule:
+        df = df.set_index("ts")
+        df = df.resample(resample_rule).agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            volume=("volume", "sum"),
+        ).dropna(subset=["close"]).reset_index()
+
+    # mantém só os últimos limit
+    return df.tail(limit)
+
+
 def main():
-    # cria exchange
-    exchange_class = getattr(ccxt, EXCHANGE_ID)
-    exchange = exchange_class({
-        "enableRateLimit": True,
-        "options": {"defaultType": DEFAULT_TYPE},
-    })
+    print(f"[info] MEXC perps | TF={TIMEFRAME} | MA={MA_TYPE} {SHORT_MA}/{LONG_MA} | TOP={TOP_PERPS}")
 
-    print(f"[info] exchange={EXCHANGE_ID} defaultType={DEFAULT_TYPE} timeframe={TIMEFRAME}")
-
-    # load markets
-    exchange.load_markets()
-
-    # symbols
-    symbols = top_perps_by_volume(exchange, quote=QUOTE, n=TOP_PERPS)
-    print(f"[info] símbolos selecionados: {len(symbols)} (TOP_PERPS={TOP_PERPS})")
+    symbols = get_top_usdt_perps(TOP_PERPS)
+    print(f"[info] símbolos selecionados: {len(symbols)}")
 
     results = []
     for sym in symbols:
         try:
-            df = fetch_ohlcv_df(exchange, sym, timeframe=TIMEFRAME, limit=OHLCV_LIMIT)
+            df = fetch_ohlcv(sym, TIMEFRAME, OHLCV_LIMIT)
             if len(df) < LONG_MA + 5:
                 continue
 
@@ -179,7 +231,6 @@ def main():
             last_ma_s = float(ma_s.iloc[-1])
             last_ma_l = float(ma_l.iloc[-1])
 
-            # distância percentual entre as médias (positivo = curta acima)
             ma_dist_pct = (last_ma_s - last_ma_l) / last_ma_l * 100.0
 
             bullish = (last_ma_s > last_ma_l) and (last_close > last_ma_s) and (last_close > last_ma_l)
@@ -199,24 +250,19 @@ def main():
                 f"{MA_TYPE}{LONG_MA}": last_ma_l,
                 "ma_dist_pct": ma_dist_pct,
             })
-
-        except Exception as e:
-            # segue para o próximo símbolo
-            # (se quiser depurar, descomente a linha abaixo)
-            # print(f"[warn] erro em {sym}: {repr(e)}")
+        except Exception:
             continue
 
-    # Sempre cria CSVs (mesmo vazios), para não quebrar upload
     cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
     out = pd.DataFrame(results, columns=cols)
 
     bullish_df = out[out["trend"] == "ALTA"].sort_values("ma_dist_pct", ascending=False)
     bearish_df = out[out["trend"] == "BAIXA"].sort_values("ma_dist_pct", ascending=True)
 
-    print(f"\n=== ALTA | {EXCHANGE_ID} | TF={TIMEFRAME} | {MA_TYPE.upper()} {SHORT_MA}/{LONG_MA} ===")
+    print("\n=== ALTA (ordenado por distância % entre MAs) ===")
     print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
 
-    print(f"\n=== BAIXA | {EXCHANGE_ID} | TF={TIMEFRAME} | {MA_TYPE.upper()} {SHORT_MA}/{LONG_MA} ===")
+    print("\n=== BAIXA (ordenado por distância % entre MAs) ===")
     print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
 
     out.to_csv("scanner_resultado_completo.csv", index=False)
@@ -228,9 +274,6 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print("[fatal] erro no scanner:", repr(e))
+        print("[fatal]", repr(e))
         traceback.print_exc()
         raise
-
-if __name__ == "__main__":
-    main()
