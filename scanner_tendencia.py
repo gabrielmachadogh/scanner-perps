@@ -219,8 +219,18 @@ def fetch_ohlcv(symbol: str, tf: str, limit: int):
     return df.tail(limit)
 
 
+def save_outputs(out: pd.DataFrame, bullish_df: pd.DataFrame, bearish_df: pd.DataFrame):
+    out.to_csv("scanner_resultado_completo.csv", index=False)
+    bullish_df.to_csv("scanner_alta.csv", index=False)
+    bearish_df.to_csv("scanner_baixa.csv", index=False)
+
+
 def main():
     print(f"[info] MEXC perps | TF={TIMEFRAME} | MA={MA_TYPE} {SHORT_MA}/{LONG_MA} | TOP={TOP_PERPS}")
+
+    # garante que os arquivos existam mesmo se der problema
+    empty = pd.DataFrame(columns=["symbol", "trend", "close", "volume_diario", "ma_dist_pct"])
+    save_outputs(empty, empty, empty)
 
     symbols = get_top_usdt_perps(TOP_PERPS)
     print(f"[info] símbolos selecionados: {len(symbols)}")
@@ -262,7 +272,6 @@ def main():
             elif bearish:
                 trend = "BAIXA"
 
-            # volume diário = soma do volume dos últimos 24h (em barras do timeframe)
             volume_diario_num = float(df["volume"].tail(bpd).sum()) if len(df) >= 1 else 0.0
 
             results.append({
@@ -276,7 +285,32 @@ def main():
         except Exception:
             continue
 
-    cols = ["symbol", "trend", "close", "volume_diario", "ma_dist_pct"]
-    out = pd.DataFrame(results, columns=cols)
+    out = pd.DataFrame(results, columns=["symbol", "trend", "close", "volume_diario", "ma_dist_pct"])
 
-    # Ordenar do menor 
+    bullish_df = (
+        out[out["trend"] == "ALTA"]
+        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+        .sort_values("abs_dist", ascending=True)
+        .drop(columns=["abs_dist"])
+    )
+
+    bearish_df = (
+        out[out["trend"] == "BAIXA"]
+        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+        .sort_values("abs_dist", ascending=True)
+        .drop(columns=["abs_dist"])
+    )
+
+    print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
+
+    print("\n=== ALTA (menor distância -> maior) ===")
+    print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
+
+    print("\n=== BAIXA (menor distância -> maior) ===")
+    print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
+
+    save_outputs(out, bullish_df, bearish_df)
+
+
+if __name__ == "__main__":
+    main()
