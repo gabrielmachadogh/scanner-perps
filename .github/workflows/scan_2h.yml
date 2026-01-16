@@ -1,4 +1,4 @@
-name: scan-perps-a-cada-2h
+name: scan-mexc-perps-a-cada-2h
 
 on:
   schedule:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -33,8 +35,38 @@ jobs:
           MA_TYPE: sma
           DEBUG: "0"
 
+      - name: List generated files
+        run: ls -la
+
+      - name: Upload CSVs (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-scan
+          if-no-files-found: ignore
+          path: |
+            scanner_alta.csv
+            scanner_baixa.csv
+            scanner_resultado_completo.csv
+
       - name: Save results to repo (commit)
         run: |
+          mkdir -p results
+
+          for f in scanner_alta.csv scanner_baixa.csv scanner_resultado_completo.csv; do
+            if [ -f "$f" ]; then
+              cp "$f" "results/$f"
+            else
+              echo "WARN: arquivo não encontrado: $f"
+            fi
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add results/*.csv || true
+          git commit -m "update scan results" || echo "no changes to commit"
+          git pull --rebase || true
+          git push        run: |
           mkdir -p results
           cp scanner_alta.csv results/scanner_alta.csv
           cp scanner_baixa.csv results/scanner_baixa.csv
