@@ -23,13 +23,13 @@ jobs:
       - name: Run scanner
         run: python scanner_tendencia.py
         env:
-          EXCHANGE_ID: bybit
-          DEFAULT_TYPE: swap
-          TIMEFRAME: 2h
-          TOP_PERPS: "80"
-          SHORT_MA: "20"
-          LONG_MA: "50"
-          MA_TYPE: ema
+         EXCHANGE_ID: bybit
+         DEFAULT_TYPE: swap
+         TIMEFRAME: 2h
+         TOP_PERPS: "80"
+         SHORT_MA: "20"
+         LONG_MA: "50"
+         MA_TYPE: ema
 
       - name: Upload CSVs
         uses: actions/upload-artifact@v4
