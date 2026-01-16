@@ -25,9 +25,9 @@ jobs:
         env:
           TIMEFRAME: 2h
           TOP_PERPS: "80"
-          SHORT_MA: "20"
-          LONG_MA: "50"
-          MA_TYPE: ema
+          SHORT_MA: "10"
+          LONG_MA: "100"
+          MA_TYPE: sma
           DEBUG: "1"
 
 
