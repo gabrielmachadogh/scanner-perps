@@ -35,10 +35,7 @@ jobs:
           MA_TYPE: sma
           DEBUG: "0"
 
-      - name: List generated files
-        run: ls -la
-
-      - name: Upload CSVs (artifact)
+      - name: Upload outputs (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: resultados-scan-attempt-${{ github.run_attempt }}
@@ -48,15 +45,19 @@ jobs:
             scanner_alta.csv
             scanner_baixa.csv
             scanner_resultado_completo.csv
+            scanner_alta.md
+            scanner_baixa.md
+            scanner_resumo.md
 
       - name: Save results to repo (commit)
         run: |
-          # atualiza antes para reduzir chance de conflito ao dar push
           git pull --rebase || true
 
           mkdir -p results
 
-          for f in scanner_alta.csv scanner_baixa.csv scanner_resultado_completo.csv; do
+          for f in \
+            scanner_alta.csv scanner_baixa.csv scanner_resultado_completo.csv \
+            scanner_alta.md scanner_baixa.md scanner_resumo.md; do
             if [ -f "$f" ]; then
               cp "$f" "results/$f"
             else
@@ -67,7 +68,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add results/*.csv || true
+          git add results/* || true
           git commit -m "update scan results" || echo "no changes to commit"
           git push
-          
