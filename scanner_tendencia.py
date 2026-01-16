@@ -1,15 +1,14 @@
 import os
 import time
-import traceback
 import requests
 import pandas as pd
 
 BASE_URL = os.getenv("MEXC_CONTRACT_BASE_URL", "https://contract.mexc.com/api/v1")
 
 TIMEFRAME = os.getenv("TIMEFRAME", "2h")  # "1h", "2h", "4h", "1d"
-SHORT_MA = int(os.getenv("SHORT_MA", "20"))
-LONG_MA = int(os.getenv("LONG_MA", "50"))
-MA_TYPE = os.getenv("MA_TYPE", "ema").lower()  # ema|sma
+SHORT_MA = int(os.getenv("SHORT_MA", "10"))
+LONG_MA = int(os.getenv("LONG_MA", "100"))
+MA_TYPE = os.getenv("MA_TYPE", "sma").lower()  # ema|sma
 
 TOP_PERPS = int(os.getenv("TOP_PERPS", "80"))
 TOP_N_OUTPUT = int(os.getenv("TOP_N_OUTPUT", "30"))
@@ -57,10 +56,6 @@ def extract_volume_like(item: dict):
 
 
 def get_top_usdt_perps(n=80):
-    """
-    Pega tickers de perps e ordena por volume (quando disponível).
-    Se não achar volume, faz fallback pegando os primeiros N.
-    """
     url = f"{BASE_URL}/contract/ticker"
     data = http_get_json(url)
 
@@ -81,8 +76,6 @@ def get_top_usdt_perps(n=80):
         sym = t.get("symbol") or t.get("contractId") or t.get("name")
         if not sym:
             continue
-
-        # contratos MEXC normalmente: "BTC_USDT"
         if not sym.endswith(f"_{QUOTE}"):
             continue
 
@@ -90,14 +83,12 @@ def get_top_usdt_perps(n=80):
 
         v = extract_volume_like(t)
         if v is None:
-            v = 0.0  # se não veio volume, ainda deixa entrar no ranking
+            v = 0.0
         rows.append((sym, float(v)))
 
     rows.sort(key=lambda x: x[1], reverse=True)
-
     if not rows and fallback_syms:
         return fallback_syms[:n]
-
     return [s for s, _ in rows[:n]]
 
 
@@ -106,7 +97,6 @@ def timeframe_to_mexc_interval_and_resample(tf: str):
     if tf == "1h":
         return "Min60", None, 1
     if tf == "2h":
-        # vamos puxar 1h e reagrupar em 2h
         return "Min60", "2H", 2
     if tf == "4h":
         return "Hour4", None, 1
@@ -115,12 +105,19 @@ def timeframe_to_mexc_interval_and_resample(tf: str):
     raise ValueError("TIMEFRAME suportado: 1h, 2h, 4h, 1d")
 
 
+def bars_per_day(tf: str) -> int:
+    tf = tf.lower().strip()
+    if tf.endswith("h"):
+        h = int(tf[:-1])
+        return max(1, int(24 / h))
+    if tf in ("1d", "d"):
+        return 1
+    # fallback conservador
+    return 1
+
+
 def to_datetime_auto(ts_series: pd.Series) -> pd.Series:
-    """
-    Detecta se timestamp está em segundos ou ms pelo tamanho e converte.
-    """
     s = pd.to_numeric(ts_series, errors="coerce")
-    # se a maioria for < 1e12, provavelmente é segundos (10 dígitos)
     unit = "s" if s.dropna().median() < 1e12 else "ms"
     return pd.to_datetime(s, unit=unit, utc=True)
 
@@ -134,7 +131,6 @@ def parse_kline_to_df(payload):
     if data is None:
         raise RuntimeError(f"Resposta sem data: {payload}")
 
-    # formato dict com arrays
     if isinstance(data, dict) and "time" in data:
         df = pd.DataFrame({
             "ts": data["time"],
@@ -145,30 +141,28 @@ def parse_kline_to_df(payload):
             "volume": data.get("vol") or data.get("volume"),
         })
 
-    # formato lista
     elif isinstance(data, list):
         if len(data) == 0:
             return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
 
         first = data[0]
         if isinstance(first, (list, tuple)):
-            df = pd.DataFrame(data)
-            # tenta mapear os 6 primeiros campos: ts,o,h,l,c,v
-            df = df.iloc[:, :6]
+            df = pd.DataFrame(data).iloc[:, :6]
             df.columns = ["ts", "open", "high", "low", "close", "volume"]
         elif isinstance(first, dict):
             df = pd.DataFrame(data)
             rename = {}
-            for a, b in [("time", "ts"), ("timestamp", "ts"), ("t", "ts"),
-                         ("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"),
-                         ("v", "volume"), ("vol", "volume")]:
+            for a, b in [
+                ("time", "ts"), ("timestamp", "ts"), ("t", "ts"),
+                ("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"),
+                ("v", "volume"), ("vol", "volume")
+            ]:
                 if a in df.columns and b not in df.columns:
                     rename[a] = b
             df = df.rename(columns=rename)
             df = df[["ts", "open", "high", "low", "close", "volume"]]
         else:
             raise RuntimeError(f"Formato de kline inesperado: {first}")
-
     else:
         raise RuntimeError(f"Formato de kline inesperado: {type(data)}")
 
@@ -183,7 +177,6 @@ def parse_kline_to_df(payload):
 def fetch_ohlcv(symbol: str, tf: str, limit: int):
     interval, resample_rule, factor = timeframe_to_mexc_interval_and_resample(tf)
 
-    # IMPORTANTÍSSIMO: muitos endpoints usam start/end em SEGUNDOS
     end_s = int(time.time())
     interval_s = {
         "Min60": 60 * 60,
@@ -222,14 +215,14 @@ def main():
         print("[debug] exemplo símbolos:", symbols[:5])
 
     results = []
-    first_error = None
+    bpd = bars_per_day(TIMEFRAME)
 
     for i, sym in enumerate(symbols):
         try:
             df = fetch_ohlcv(sym, TIMEFRAME, OHLCV_LIMIT)
 
-            if DEBUG and i == 0:
-                print(f"[debug] {sym} candles retornados: {len(df)} | de {df['ts'].iloc[0]} até {df['ts'].iloc[-1]}")
+            if DEBUG and i == 0 and len(df) > 0:
+                print(f"[debug] {sym} candles={len(df)} | {df['ts'].iloc[0]} -> {df['ts'].iloc[-1]}")
 
             if len(df) < LONG_MA + 5:
                 continue
@@ -256,31 +249,29 @@ def main():
             elif bearish:
                 trend = "BAIXA"
 
+            volume_diario = float(df["volume"].tail(bpd).sum()) if len(df) >= 1 else 0.0
+
             results.append({
                 "symbol": sym,
                 "trend": trend,
                 "close": last_close,
-                f"{MA_TYPE}{SHORT_MA}": last_ma_s,
-                f"{MA_TYPE}{LONG_MA}": last_ma_l,
-                "ma_dist_pct": ma_dist_pct,
+                "volume_diario": volume_diario,
+                "ma_dist_pct": float(ma_dist_pct),
             })
 
-        except Exception as e:
-            if first_error is None:
-                first_error = (sym, e)
+        except Exception:
             continue
 
-        cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
+    cols = ["symbol", "trend", "close", "volume_diario", "ma_dist_pct"]
     out = pd.DataFrame(results, columns=cols)
 
-    # Ordenar do MENOR afastamento (mais perto de 0) para o MAIOR, tanto em ALTA quanto em BAIXA
+    # Ordenar do menor afastamento (mais perto de 0) para o maior, tanto em ALTA quanto BAIXA
     bullish_df = (
         out[out["trend"] == "ALTA"]
         .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
         .sort_values("abs_dist", ascending=True)
         .drop(columns=["abs_dist"])
     )
-
     bearish_df = (
         out[out["trend"] == "BAIXA"]
         .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
@@ -290,24 +281,10 @@ def main():
 
     print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
 
-    print("\n=== ALTA (ordenado por menor distância entre MAs) ===")
+    print("\n=== ALTA (menor distância -> maior) ===")
     print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
 
-    print("\n=== BAIXA (ordenado por menor distância entre MAs) ===")
-    print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
-
-    out.to_csv("scanner_resultado_completo.csv", index=False)
-    bullish_df.to_csv("scanner_alta.csv", index=False)
-    bearish_df.to_csv("scanner_baixa.csv", index=False)
-    if first_error is not None and DEBUG:
-        sym, e = first_error
-        print("[debug] primeiro erro capturado em", sym, "->", repr(e))
-        traceback.print_exc()
-
-    print("\n=== ALTA (ordenado por distância % entre MAs) ===")
-    print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
-
-    print("\n=== BAIXA (ordenado por distância % entre MAs) ===")
+    print("\n=== BAIXA (menor distância -> maior) ===")
     print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
 
     out.to_csv("scanner_resultado_completo.csv", index=False)
