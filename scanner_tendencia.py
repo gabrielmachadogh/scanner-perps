@@ -11,7 +11,7 @@ MA_TYPE = os.getenv("MA_TYPE", "ema").lower()  # "ema" ou "sma"
 TOP_PERPS = int(os.getenv("TOP_PERPS", "80"))       # top 80 por volume
 TOP_N_OUTPUT = int(os.getenv("TOP_N_OUTPUT", "30")) # quantos mostrar/salvar no topo
 OHLCV_LIMIT = int(os.getenv("OHLCV_LIMIT", "300"))  # histórico necessário (> LONG_MA)
-
+DEFAULT_TYPE = os.getenv("DEFAULT_TYPE", "swap")
 EXCHANGE_ID = os.getenv("EXCHANGE_ID", "binanceusdm")  # Binance USDT-M Perps
 QUOTE = os.getenv("QUOTE", "USDT")
 # ========================================================================
@@ -57,9 +57,12 @@ def fetch_ohlcv_df(exchange, symbol, timeframe="2h", limit=300) -> pd.DataFrame:
 
 
 def main():
-    exchange_class = getattr(ccxt, EXCHANGE_ID)
-    exchange = exchange_class({"enableRateLimit": True})
-    exchange.load_markets()
+   exchange_class = getattr(ccxt, EXCHANGE_ID)
+exchange = exchange_class({
+    "enableRateLimit": True,
+    "options": {"defaultType": DEFAULT_TYPE},
+})
+exchange.load_markets()
 
     symbols = top_perps_by_volume(exchange, quote=QUOTE, n=TOP_PERPS)
 
