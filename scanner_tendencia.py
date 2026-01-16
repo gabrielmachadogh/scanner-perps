@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 
 BASE_URL = os.getenv("MEXC_CONTRACT_BASE_URL", "https://contract.mexc.com/api/v1")
+MEXC_FUTURES_WEB_BASE = os.getenv("MEXC_FUTURES_WEB_BASE", "https://futures.mexc.com/exchange")
 
 TIMEFRAME = os.getenv("TIMEFRAME", "2h")  # "1h", "2h", "4h", "1d"
 SHORT_MA = int(os.getenv("SHORT_MA", "10"))
@@ -34,6 +35,11 @@ def format_millions(x) -> str:
         return ""
     m = x / 1_000_000.0
     return f"{int(round(m))}M"
+
+
+def symbol_to_link(symbol: str) -> str:
+    # Ex.: https://futures.mexc.com/exchange/BTC_USDT
+    return f"{MEXC_FUTURES_WEB_BASE}/{symbol}"
 
 
 def http_get_json(url, params=None, tries=3, timeout=25):
@@ -219,17 +225,62 @@ def fetch_ohlcv(symbol: str, tf: str, limit: int):
     return df.tail(limit)
 
 
+def df_to_markdown_with_links(df: pd.DataFrame, title: str, out_path: str, top_n: int = 200):
+    """
+    Gera uma tabela Markdown com link clicável no GitHub.
+    Espera colunas: symbol, link, trend, close, volume_diario, ma_dist_pct
+    """
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(f"# {title}\n\n")
+        f.write(f"- Gerado em UTC: {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}\n")
+        f.write(f"- Timeframe: `{TIMEFRAME}` | MA: `{MA_TYPE} {SHORT_MA}/{LONG_MA}` | Top perps: `{TOP_PERPS}`\n\n")
+
+        f.write("| Par | Trend | Close | Volume (24h) | Dist (%) |\n")
+        f.write("|---|---:|---:|---:|---:|\n")
+
+        if df is None or df.empty:
+            f.write("| - | - | - | - | - |\n")
+            return
+
+        for _, row in df.head(top_n).iterrows():
+            sym = str(row.get("symbol", ""))
+            link = str(row.get("link", ""))
+            trend = str(row.get("trend", ""))
+            close = row.get("close", "")
+            vol = str(row.get("volume_diario", ""))
+            dist = row.get("ma_dist_pct", "")
+
+            try:
+                close_str = f"{float(close):.6g}"
+            except Exception:
+                close_str = str(close)
+
+            try:
+                dist_str = f"{float(dist):.3f}"
+            except Exception:
+                dist_str = str(dist)
+
+            par_md = f"[{sym}]({link})" if link else sym
+            f.write(f"| {par_md} | {trend} | {close_str} | {vol} | {dist_str} |\n")
+
+
 def save_outputs(out: pd.DataFrame, bullish_df: pd.DataFrame, bearish_df: pd.DataFrame):
+    # CSVs
     out.to_csv("scanner_resultado_completo.csv", index=False)
     bullish_df.to_csv("scanner_alta.csv", index=False)
     bearish_df.to_csv("scanner_baixa.csv", index=False)
+
+    # Markdown (clicável no GitHub)
+    df_to_markdown_with_links(bullish_df, "Scanner ALTA (menor distância -> maior)", "scanner_alta.md")
+    df_to_markdown_with_links(bearish_df, "Scanner BAIXA (menor distância -> maior)", "scanner_baixa.md")
+    df_to_markdown_with_links(out, "Scanner COMPLETO", "scanner_resumo.md")
 
 
 def main():
     print(f"[info] MEXC perps | TF={TIMEFRAME} | MA={MA_TYPE} {SHORT_MA}/{LONG_MA} | TOP={TOP_PERPS}")
 
     # garante que os arquivos existam mesmo se der problema
-    empty = pd.DataFrame(columns=["symbol", "trend", "close", "volume_diario", "ma_dist_pct"])
+    empty = pd.DataFrame(columns=["symbol", "link", "trend", "close", "volume_diario", "ma_dist_pct"])
     save_outputs(empty, empty, empty)
 
     symbols = get_top_usdt_perps(TOP_PERPS)
@@ -276,6 +327,7 @@ def main():
 
             results.append({
                 "symbol": sym,
+                "link": symbol_to_link(sym),
                 "trend": trend,
                 "close": last_close,
                 "volume_diario": format_millions(volume_diario_num),
@@ -285,7 +337,7 @@ def main():
         except Exception:
             continue
 
-    out = pd.DataFrame(results, columns=["symbol", "trend", "close", "volume_diario", "ma_dist_pct"])
+    out = pd.DataFrame(results, columns=["symbol", "link", "trend", "close", "volume_diario", "ma_dist_pct"])
 
     bullish_df = (
         out[out["trend"] == "ALTA"]
@@ -302,12 +354,6 @@ def main():
     )
 
     print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
-
-    print("\n=== ALTA (menor distância -> maior) ===")
-    print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
-
-    print("\n=== BAIXA (menor distância -> maior) ===")
-    print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
 
     save_outputs(out, bullish_df, bearish_df)
 
