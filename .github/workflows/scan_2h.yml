@@ -34,6 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: resultados-scan
+          if-no-files-found: ignore
           path: |
             scanner_alta.csv
             scanner_baixa.csv
