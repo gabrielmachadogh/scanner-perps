@@ -33,6 +33,7 @@ jobs:
           SHORT_MA: "10"
           LONG_MA: "100"
           MA_TYPE: sma
+          VOLUME_MODE: AUTO
           DEBUG: "0"
 
       - name: Upload outputs (artifact)
