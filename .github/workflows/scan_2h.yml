@@ -1,0 +1,40 @@
+name: scan-perps-a-cada-2h
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # a cada 2 horas (UTC)
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        run: python scanner_tendencia.py
+        env:
+          EXCHANGE_ID: binanceusdm
+          TIMEFRAME: 2h
+          TOP_PERPS: "80"
+          SHORT_MA: "20"
+          LONG_MA: "50"
+          MA_TYPE: ema
+
+      - name: Upload CSVs
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-scan
+          path: |
+            scanner_alta.csv
+            scanner_baixa.csv
+            scanner_resultado_completo.csv
