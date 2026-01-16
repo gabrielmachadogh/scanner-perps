@@ -270,25 +270,35 @@ def main():
                 first_error = (sym, e)
             continue
 
-    cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
+        cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
     out = pd.DataFrame(results, columns=cols)
 
+    # Ordenar do MENOR afastamento (mais perto de 0) para o MAIOR, tanto em ALTA quanto em BAIXA
     bullish_df = (
-    out[out["trend"] == "ALTA"]
-    .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
-    .sort_values("abs_dist", ascending=True)
-    .drop(columns=["abs_dist"])
-)
+        out[out["trend"] == "ALTA"]
+        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+        .sort_values("abs_dist", ascending=True)
+        .drop(columns=["abs_dist"])
+    )
 
-bearish_df = (
-    out[out["trend"] == "BAIXA"]
-    .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
-    .sort_values("abs_dist", ascending=True)
-    .drop(columns=["abs_dist"])
-)
+    bearish_df = (
+        out[out["trend"] == "BAIXA"]
+        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+        .sort_values("abs_dist", ascending=True)
+        .drop(columns=["abs_dist"])
+    )
 
     print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
 
+    print("\n=== ALTA (ordenado por menor distância entre MAs) ===")
+    print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
+
+    print("\n=== BAIXA (ordenado por menor distância entre MAs) ===")
+    print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
+
+    out.to_csv("scanner_resultado_completo.csv", index=False)
+    bullish_df.to_csv("scanner_alta.csv", index=False)
+    bearish_df.to_csv("scanner_baixa.csv", index=False)
     if first_error is not None and DEBUG:
         sym, e = first_error
         print("[debug] primeiro erro capturado em", sym, "->", repr(e))
