@@ -23,7 +23,8 @@ jobs:
       - name: Run scanner
         run: python scanner_tendencia.py
         env:
-          EXCHANGE_ID: binanceusdm
+          EXCHANGE_ID: bybit
+          DEFAULT_TYPE: swap
           TIMEFRAME: 2h
           TOP_PERPS: "80"
           SHORT_MA: "20"
