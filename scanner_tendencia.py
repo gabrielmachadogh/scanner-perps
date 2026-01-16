@@ -26,6 +26,16 @@ def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
     raise ValueError("MA_TYPE deve ser 'ema' ou 'sma'")
 
 
+def format_millions(x) -> str:
+    """Formata número para notação em milhões: 22M, 117M, ..."""
+    try:
+        x = float(x)
+    except Exception:
+        return ""
+    m = x / 1_000_000.0
+    return f"{int(round(m))}M"
+
+
 def http_get_json(url, params=None, tries=3, timeout=25):
     last = None
     for i in range(tries):
@@ -70,9 +80,11 @@ def get_top_usdt_perps(n=80):
 
     rows = []
     fallback_syms = []
+
     for t in tickers:
         if not isinstance(t, dict):
             continue
+
         sym = t.get("symbol") or t.get("contractId") or t.get("name")
         if not sym:
             continue
@@ -97,6 +109,7 @@ def timeframe_to_mexc_interval_and_resample(tf: str):
     if tf == "1h":
         return "Min60", None, 1
     if tf == "2h":
+        # puxa 1h e agrega em 2h
         return "Min60", "2H", 2
     if tf == "4h":
         return "Hour4", None, 1
@@ -112,18 +125,7 @@ def bars_per_day(tf: str) -> int:
         return max(1, int(24 / h))
     if tf in ("1d", "d"):
         return 1
-    # fallback conservador
     return 1
-
-
-def format_millions(x) -> str:
-    try:
-        x = float(x)
-    except Exception:
-        return ""
-    m = x / 1_000_000.0
-    # sem casas decimais, como nos exemplos: 22M, 117M...
-    return f"{int(round(m))}M"
 
 
 def to_datetime_auto(ts_series: pd.Series) -> pd.Series:
@@ -187,6 +189,7 @@ def parse_kline_to_df(payload):
 def fetch_ohlcv(symbol: str, tf: str, limit: int):
     interval, resample_rule, factor = timeframe_to_mexc_interval_and_resample(tf)
 
+    # start/end em SEGUNDOS
     end_s = int(time.time())
     interval_s = {
         "Min60": 60 * 60,
@@ -259,13 +262,14 @@ def main():
             elif bearish:
                 trend = "BAIXA"
 
-            volume_diario = float(df["volume"].tail(bpd).sum()) if len(df) >= 1 else 0.0
+            # volume diário = soma do volume dos últimos 24h (em barras do timeframe)
+            volume_diario_num = float(df["volume"].tail(bpd).sum()) if len(df) >= 1 else 0.0
 
             results.append({
                 "symbol": sym,
                 "trend": trend,
                 "close": last_close,
-                "volume_diario": volume_diario,
+                "volume_diario": format_millions(volume_diario_num),
                 "ma_dist_pct": float(ma_dist_pct),
             })
 
@@ -275,32 +279,4 @@ def main():
     cols = ["symbol", "trend", "close", "volume_diario", "ma_dist_pct"]
     out = pd.DataFrame(results, columns=cols)
 
-    # Ordenar do menor afastamento (mais perto de 0) para o maior, tanto em ALTA quanto BAIXA
-    bullish_df = (
-        out[out["trend"] == "ALTA"]
-        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
-        .sort_values("abs_dist", ascending=True)
-        .drop(columns=["abs_dist"])
-    )
-    bearish_df = (
-        out[out["trend"] == "BAIXA"]
-        .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
-        .sort_values("abs_dist", ascending=True)
-        .drop(columns=["abs_dist"])
-    )
-
-    print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
-
-    print("\n=== ALTA (menor distância -> maior) ===")
-    print(bullish_df.head(TOP_N_OUTPUT).to_string(index=False))
-
-    print("\n=== BAIXA (menor distância -> maior) ===")
-    print(bearish_df.head(TOP_N_OUTPUT).to_string(index=False))
-
-    out.to_csv("scanner_resultado_completo.csv", index=False)
-    bullish_df.to_csv("scanner_alta.csv", index=False)
-    bearish_df.to_csv("scanner_baixa.csv", index=False)
-
-
-if __name__ == "__main__":
-    main()
+    # Ordenar do menor 
