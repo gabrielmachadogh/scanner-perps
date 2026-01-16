@@ -273,8 +273,19 @@ def main():
     cols = ["symbol", "trend", "close", f"{MA_TYPE}{SHORT_MA}", f"{MA_TYPE}{LONG_MA}", "ma_dist_pct"]
     out = pd.DataFrame(results, columns=cols)
 
-    bullish_df = out[out["trend"] == "ALTA"].sort_values("ma_dist_pct", ascending=False)
-    bearish_df = out[out["trend"] == "BAIXA"].sort_values("ma_dist_pct", ascending=True)
+    bullish_df = (
+    out[out["trend"] == "ALTA"]
+    .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+    .sort_values("abs_dist", ascending=True)
+    .drop(columns=["abs_dist"])
+)
+
+bearish_df = (
+    out[out["trend"] == "BAIXA"]
+    .assign(abs_dist=lambda d: d["ma_dist_pct"].abs())
+    .sort_values("abs_dist", ascending=True)
+    .drop(columns=["abs_dist"])
+)
 
     print(f"[info] linhas geradas: total={len(out)} | alta={len(bullish_df)} | baixa={len(bearish_df)}")
 
