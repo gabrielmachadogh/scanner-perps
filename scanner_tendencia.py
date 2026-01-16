@@ -18,6 +18,11 @@ OHLCV_LIMIT = int(os.getenv("OHLCV_LIMIT", "300"))
 QUOTE = os.getenv("QUOTE", "USDT")
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
+# Volume no output:
+# - "M": sempre em milhões (6 bilhões -> 6000M)
+# - "AUTO": usa B/M
+VOLUME_MODE = os.getenv("VOLUME_MODE", "M").upper()
+
 
 def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
     if ma_type == "sma":
@@ -27,18 +32,23 @@ def calc_ma(series: pd.Series, period: int, ma_type: str) -> pd.Series:
     raise ValueError("MA_TYPE deve ser 'ema' ou 'sma'")
 
 
-def format_millions(x) -> str:
-    """Formata número para notação em milhões: 22M, 117M, ..."""
+def format_volume(x) -> str:
+    """Formata volume. Por padrão em milhões: 22M, 117M, 6000M."""
     try:
         x = float(x)
     except Exception:
         return ""
-    m = x / 1_000_000.0
-    return f"{int(round(m))}M"
+
+    if VOLUME_MODE == "AUTO":
+        if x >= 1_000_000_000:
+            return f"{x / 1_000_000_000:.1f}B".replace(".0B", "B")
+        return f"{int(round(x / 1_000_000))}M"
+
+    # modo "M"
+    return f"{int(round(x / 1_000_000))}M"
 
 
 def symbol_to_link(symbol: str) -> str:
-    # Ex.: https://futures.mexc.com/exchange/BTC_USDT
     return f"{MEXC_FUTURES_WEB_BASE}/{symbol}"
 
 
@@ -55,23 +65,28 @@ def http_get_json(url, params=None, tries=3, timeout=25):
     raise last
 
 
-def extract_volume_like(item: dict):
-    keys = [
-        "amount24", "turnover24", "quoteVolume", "quoteVol",
-        "vol24", "volume24", "volume", "amount"
-    ]
-    for k in keys:
-        v = item.get(k)
-        if v is None:
-            continue
-        try:
-            return float(v)
-        except Exception:
-            pass
+def extract_turnover_usdt_24h(t: dict):
+    """
+    Tenta extrair o volume 24h "financeiro" (turnover) em USDT, como o site mostra.
+    Na MEXC perps, frequentemente é `amount24`. Em alguns casos pode ser `turnover24`.
+    """
+    if not isinstance(t, dict):
+        return None
+
+    # valores no nível de t
+    for k in ["amount24", "turnover24", "quoteVolume", "quoteVol"]:
+        v = t.get(k)
+        if v is not None:
+            try:
+                return float(v)
+            except Exception:
+                pass
+
+    # às vezes vem dentro de "data" - mas aqui já estamos no item
     return None
 
 
-def get_top_usdt_perps(n=80):
+def fetch_contract_tickers():
     url = f"{BASE_URL}/contract/ticker"
     data = http_get_json(url)
 
@@ -84,8 +99,19 @@ def get_top_usdt_perps(n=80):
     if not isinstance(tickers, list):
         raise RuntimeError(f"Formato inesperado em ticker: {data}")
 
+    return tickers
+
+
+def get_top_usdt_perps_and_turnover(n=80):
+    """
+    Retorna:
+      - symbols_top: lista dos top N _USDT
+      - turnover_map: dict {symbol: turnover_usdt_24h}
+    """
+    tickers = fetch_contract_tickers()
+
     rows = []
-    fallback_syms = []
+    turnover_map = {}
 
     for t in tickers:
         if not isinstance(t, dict):
@@ -97,17 +123,16 @@ def get_top_usdt_perps(n=80):
         if not sym.endswith(f"_{QUOTE}"):
             continue
 
-        fallback_syms.append(sym)
+        turnover = extract_turnover_usdt_24h(t)
+        if turnover is None:
+            turnover = 0.0
 
-        v = extract_volume_like(t)
-        if v is None:
-            v = 0.0
-        rows.append((sym, float(v)))
+        turnover_map[sym] = float(turnover)
+        rows.append((sym, float(turnover)))
 
     rows.sort(key=lambda x: x[1], reverse=True)
-    if not rows and fallback_syms:
-        return fallback_syms[:n]
-    return [s for s, _ in rows[:n]]
+    symbols_top = [s for s, _ in rows[:n]]
+    return symbols_top, turnover_map
 
 
 def timeframe_to_mexc_interval_and_resample(tf: str):
@@ -122,16 +147,6 @@ def timeframe_to_mexc_interval_and_resample(tf: str):
     if tf in ("1d", "d"):
         return "Day1", None, 1
     raise ValueError("TIMEFRAME suportado: 1h, 2h, 4h, 1d")
-
-
-def bars_per_day(tf: str) -> int:
-    tf = tf.lower().strip()
-    if tf.endswith("h"):
-        h = int(tf[:-1])
-        return max(1, int(24 / h))
-    if tf in ("1d", "d"):
-        return 1
-    return 1
 
 
 def to_datetime_auto(ts_series: pd.Series) -> pd.Series:
@@ -226,16 +241,12 @@ def fetch_ohlcv(symbol: str, tf: str, limit: int):
 
 
 def df_to_markdown_with_links(df: pd.DataFrame, title: str, out_path: str, top_n: int = 200):
-    """
-    Gera uma tabela Markdown com link clicável no GitHub.
-    Espera colunas: symbol, link, trend, close, volume_diario, ma_dist_pct
-    """
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(f"# {title}\n\n")
         f.write(f"- Gerado em UTC: {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}\n")
         f.write(f"- Timeframe: `{TIMEFRAME}` | MA: `{MA_TYPE} {SHORT_MA}/{LONG_MA}` | Top perps: `{TOP_PERPS}`\n\n")
 
-        f.write("| Par | Trend | Close | Volume (24h) | Dist (%) |\n")
+        f.write("| Par | Trend | Close | Volume (24h, USDT) | Dist (%) |\n")
         f.write("|---|---:|---:|---:|---:|\n")
 
         if df is None or df.empty:
@@ -265,31 +276,30 @@ def df_to_markdown_with_links(df: pd.DataFrame, title: str, out_path: str, top_n
 
 
 def save_outputs(out: pd.DataFrame, bullish_df: pd.DataFrame, bearish_df: pd.DataFrame):
-    # CSVs
     out.to_csv("scanner_resultado_completo.csv", index=False)
     bullish_df.to_csv("scanner_alta.csv", index=False)
     bearish_df.to_csv("scanner_baixa.csv", index=False)
 
-    # Markdown (clicável no GitHub)
     df_to_markdown_with_links(bullish_df, "Scanner ALTA (menor distância -> maior)", "scanner_alta.md")
     df_to_markdown_with_links(bearish_df, "Scanner BAIXA (menor distância -> maior)", "scanner_baixa.md")
     df_to_markdown_with_links(out, "Scanner COMPLETO", "scanner_resumo.md")
 
 
 def main():
-    print(f"[info] MEXC perps | TF={TIMEFRAME} | MA={MA_TYPE} {SHORT_MA}/{LONG_MA} | TOP={TOP_PERPS}")
+    print(f"[info] MEXC perps | TF={TIMEFRAME} | MA={MA_TYPE} {SHORT_MA}/{LONG_MA} | TOP={TOP_PERPS} | VOLUME_MODE={VOLUME_MODE}")
 
-    # garante que os arquivos existam mesmo se der problema
+    # garante arquivos existirem mesmo se der problema
     empty = pd.DataFrame(columns=["symbol", "link", "trend", "close", "volume_diario", "ma_dist_pct"])
     save_outputs(empty, empty, empty)
 
-    symbols = get_top_usdt_perps(TOP_PERPS)
+    symbols, turnover_map = get_top_usdt_perps_and_turnover(TOP_PERPS)
     print(f"[info] símbolos selecionados: {len(symbols)}")
     if DEBUG and symbols:
         print("[debug] exemplo símbolos:", symbols[:5])
+        s0 = symbols[0]
+        print("[debug] turnover 24h (USDT) do primeiro:", s0, turnover_map.get(s0))
 
     results = []
-    bpd = bars_per_day(TIMEFRAME)
 
     for i, sym in enumerate(symbols):
         try:
@@ -323,14 +333,15 @@ def main():
             elif bearish:
                 trend = "BAIXA"
 
-            volume_diario_num = float(df["volume"].tail(bpd).sum()) if len(df) >= 1 else 0.0
+            # Volume 24h em USDT (turnover) do ticker (mais próximo do site)
+            turnover_24h_usdt = float(turnover_map.get(sym, 0.0))
 
             results.append({
                 "symbol": sym,
                 "link": symbol_to_link(sym),
                 "trend": trend,
                 "close": last_close,
-                "volume_diario": format_millions(volume_diario_num),
+                "volume_diario": format_volume(turnover_24h_usdt),
                 "ma_dist_pct": float(ma_dist_pct),
             })
 
