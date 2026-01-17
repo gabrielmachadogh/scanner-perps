@@ -1,8 +1,5 @@
 symbol,link,trend,close,volume_diario,ma_dist_pct
-FILECOIN_USDT,https://futures.mexc.com/exchange/FILECOIN_USDT,BAIXA,1.505,61M,-0.03770664232272648
-DOGE_USDT,https://futures.mexc.com/exchange/DOGE_USDT,BAIXA,0.13774,429M,-2.0867536354191323
-AVAX_USDT,https://futures.mexc.com/exchange/AVAX_USDT,BAIXA,13.616,101M,-2.3383591502972934
-BCH_USDT,https://futures.mexc.com/exchange/BCH_USDT,BAIXA,599.63,101M,-3.5391182630801805
-WLD_USDT,https://futures.mexc.com/exchange/WLD_USDT,BAIXA,0.5552,56M,-3.8162007217972422
-BEAT_USDT,https://futures.mexc.com/exchange/BEAT_USDT,BAIXA,0.3755,6M,-10.450254192828973
-LIT_USDT,https://futures.mexc.com/exchange/LIT_USDT,BAIXA,1.842,10M,-22.283980966825272
+AVAX_USDT,https://futures.mexc.com/exchange/AVAX_USDT,BAIXA,13.601,103M,-2.4730276418288852
+BCH_USDT,https://futures.mexc.com/exchange/BCH_USDT,BAIXA,599.07,94M,-3.5001909797696484
+LIT_USDT,https://futures.mexc.com/exchange/LIT_USDT,BAIXA,1.861,9M,-21.81150981492806
+PROM_USDT,https://futures.mexc.com/exchange/PROM_USDT,BAIXA,4.041,10M,-39.98871771609355
