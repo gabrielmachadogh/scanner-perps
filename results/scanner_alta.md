@@ -1,20 +1,20 @@
 # Scanner ALTA (menor distância -> maior)
 
-- Gerado em UTC: 2026-01-18 08:22:29
+- Gerado em UTC: 2026-01-18 10:18:04
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
 |---|---:|---:|---:|---:|
-| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4605.6 | 25M | 0.477 |
-| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4620.25 | 19M | 0.486 |
-| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 24.459 | 26M | 0.579 |
-| [HYPE_USDT](https://futures.mexc.com/exchange/HYPE_USDT) | ALTA | 25.824 | 67M | 3.068 |
-| [SILVER_USDT](https://futures.mexc.com/exchange/SILVER_USDT) | ALTA | 90.25 | 8M | 4.568 |
-| [ZEN_USDT](https://futures.mexc.com/exchange/ZEN_USDT) | ALTA | 11.724 | 23M | 8.455 |
-| [MANA_USDT](https://futures.mexc.com/exchange/MANA_USDT) | ALTA | 0.1653 | 12M | 11.546 |
-| [CHZ_USDT](https://futures.mexc.com/exchange/CHZ_USDT) | ALTA | 0.06276 | 99M | 14.794 |
-| [DASH_USDT](https://futures.mexc.com/exchange/DASH_USDT) | ALTA | 76.5 | 171M | 21.605 |
-| [SAND_USDT](https://futures.mexc.com/exchange/SAND_USDT) | ALTA | 0.16184 | 41M | 22.930 |
-| [BERA_USDT](https://futures.mexc.com/exchange/BERA_USDT) | ALTA | 0.9792 | 20M | 33.695 |
-| [DUSK_USDT](https://futures.mexc.com/exchange/DUSK_USDT) | ALTA | 0.1148 | 27M | 54.020 |
-| [AXS_USDT](https://futures.mexc.com/exchange/AXS_USDT) | ALTA | 2.024 | 100M | 67.518 |
+| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4601.7 | 25M | 0.462 |
+| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4615.02 | 20M | 0.469 |
+| [LINK_USDT](https://futures.mexc.com/exchange/LINK_USDT) | ALTA | 13.76 | 151M | 1.251 |
+| [ETH_USDT](https://futures.mexc.com/exchange/ETH_USDT) | ALTA | 3319.15 | 1.1B | 2.689 |
+| [HYPE_USDT](https://futures.mexc.com/exchange/HYPE_USDT) | ALTA | 25.842 | 66M | 3.141 |
+| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 26.381 | 27M | 4.521 |
+| [ZEN_USDT](https://futures.mexc.com/exchange/ZEN_USDT) | ALTA | 11.905 | 25M | 8.839 |
+| [CHZ_USDT](https://futures.mexc.com/exchange/CHZ_USDT) | ALTA | 0.06274 | 98M | 14.508 |
+| [RARE_USDT](https://futures.mexc.com/exchange/RARE_USDT) | ALTA | 0.02905 | 6M | 20.117 |
+| [DASH_USDT](https://futures.mexc.com/exchange/DASH_USDT) | ALTA | 78.97 | 168M | 21.819 |
+| [SAND_USDT](https://futures.mexc.com/exchange/SAND_USDT) | ALTA | 0.15308 | 43M | 22.189 |
+| [BERA_USDT](https://futures.mexc.com/exchange/BERA_USDT) | ALTA | 0.9534 | 20M | 34.000 |
+| [DUSK_USDT](https://futures.mexc.com/exchange/DUSK_USDT) | ALTA | 0.12329 | 25M | 54.330 |
