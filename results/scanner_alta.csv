@@ -1,8 +1,10 @@
 symbol,link,trend,close,volume_diario,ma_dist_pct
-XAUT_USDT,https://futures.mexc.com/exchange/XAUT_USDT,ALTA,4671.5,71M,0.9445239219567723
-PAXG_USDT,https://futures.mexc.com/exchange/PAXG_USDT,ALTA,4684.07,77M,1.0365242562052719
-SILVER_USDT,https://futures.mexc.com/exchange/SILVER_USDT,ALTA,93.57,34M,4.4408651895230555
-QNT_USDT,https://futures.mexc.com/exchange/QNT_USDT,ALTA,81.82,7M,5.477858531447649
-DASH_USDT,https://futures.mexc.com/exchange/DASH_USDT,ALTA,83.58,139M,24.96479442943005
-FHE_USDT,https://futures.mexc.com/exchange/FHE_USDT,ALTA,0.17279,26M,93.95269765587095
-DUSK_USDT,https://futures.mexc.com/exchange/DUSK_USDT,ALTA,0.27021,59M,115.1973581956079
+XAUT_USDT,https://futures.mexc.com/exchange/XAUT_USDT,ALTA,4664.1,77M,1.0169653909508465
+PAXG_USDT,https://futures.mexc.com/exchange/PAXG_USDT,ALTA,4679.13,79M,1.1134884457908825
+SILVER_USDT,https://futures.mexc.com/exchange/SILVER_USDT,ALTA,93.34,37M,4.5551860638468025
+QNT_USDT,https://futures.mexc.com/exchange/QNT_USDT,ALTA,82.72,7M,5.679929867716898
+ICP_USDT,https://futures.mexc.com/exchange/ICP_USDT,ALTA,4.272,103M,5.841481434904267
+ZEN_USDT,https://futures.mexc.com/exchange/ZEN_USDT,ALTA,11.89,37M,7.3832555326219405
+DASH_USDT,https://futures.mexc.com/exchange/DASH_USDT,ALTA,86.0,133M,24.664727886908462
+FHE_USDT,https://futures.mexc.com/exchange/FHE_USDT,ALTA,0.18966,29M,97.48451876566426
+DUSK_USDT,https://futures.mexc.com/exchange/DUSK_USDT,ALTA,0.2587,66M,121.76869848242279
