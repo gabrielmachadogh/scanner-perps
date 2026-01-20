@@ -1,17 +1,14 @@
 # Scanner ALTA (menor distância -> maior)
 
-- Gerado em UTC: 2026-01-20 06:31:03
+- Gerado em UTC: 2026-01-20 08:27:35
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
 |---|---:|---:|---:|---:|
-| [TRX_USDT](https://futures.mexc.com/exchange/TRX_USDT) | ALTA | 0.31251 | 10M | 0.932 |
-| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4709.1 | 95M | 1.462 |
-| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4727.91 | 58M | 1.474 |
-| [MANA_USDT](https://futures.mexc.com/exchange/MANA_USDT) | ALTA | 0.1563 | 6M | 3.778 |
-| [SILVER_USDT](https://futures.mexc.com/exchange/SILVER_USDT) | ALTA | 94.2 | 55M | 4.726 |
-| [SAND_USDT](https://futures.mexc.com/exchange/SAND_USDT) | ALTA | 0.13872 | 9M | 5.177 |
-| [BERA_USDT](https://futures.mexc.com/exchange/BERA_USDT) | ALTA | 0.9637 | 9M | 25.055 |
-| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 31.231 | 29M | 28.500 |
-| [AXS_USDT](https://futures.mexc.com/exchange/AXS_USDT) | ALTA | 2.005 | 41M | 28.662 |
-| [BTR_USDT](https://futures.mexc.com/exchange/BTR_USDT) | ALTA | 0.07596 | 10M | 39.693 |
+| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4719 | 101M | 1.559 |
+| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4736.99 | 60M | 1.585 |
+| [SILVER_USDT](https://futures.mexc.com/exchange/SILVER_USDT) | ALTA | 94.58 | 58M | 4.730 |
+| [SAND_USDT](https://futures.mexc.com/exchange/SAND_USDT) | ALTA | 0.14148 | 10M | 5.641 |
+| [BERA_USDT](https://futures.mexc.com/exchange/BERA_USDT) | ALTA | 1.0104 | 10M | 26.157 |
+| [AXS_USDT](https://futures.mexc.com/exchange/AXS_USDT) | ALTA | 1.978 | 45M | 29.202 |
+| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 31.976 | 28M | 29.826 |
