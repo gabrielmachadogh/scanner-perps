@@ -1,8 +1,7 @@
 symbol,link,trend,close,volume_diario,ma_dist_pct
-XAUT_USDT,https://futures.mexc.com/exchange/XAUT_USDT,ALTA,4760.2,157M,2.1837642720497183
-PAXG_USDT,https://futures.mexc.com/exchange/PAXG_USDT,ALTA,4780.1,90M,2.2833522503138846
-SILVER_USDT,https://futures.mexc.com/exchange/SILVER_USDT,ALTA,94.64,81M,4.453281109087367
-RESOLV_USDT,https://futures.mexc.com/exchange/RESOLV_USDT,ALTA,0.10092,12M,21.886389304355784
-RIVER_USDT,https://futures.mexc.com/exchange/RIVER_USDT,ALTA,33.828,30M,34.03108333319837
-DUSK_USDT,https://futures.mexc.com/exchange/DUSK_USDT,ALTA,0.21601,33M,78.88167477477324
-FHE_USDT,https://futures.mexc.com/exchange/FHE_USDT,ALTA,0.23453,24M,90.81938981264021
+XAUT_USDT,https://futures.mexc.com/exchange/XAUT_USDT,ALTA,4752.8,164M,2.3410903829545657
+PAXG_USDT,https://futures.mexc.com/exchange/PAXG_USDT,ALTA,4771.5,91M,2.4482035637527573
+RESOLV_USDT,https://futures.mexc.com/exchange/RESOLV_USDT,ALTA,0.10116,13M,20.78572045669422
+RIVER_USDT,https://futures.mexc.com/exchange/RIVER_USDT,ALTA,35.4,32M,35.0513080796406
+DUSK_USDT,https://futures.mexc.com/exchange/DUSK_USDT,ALTA,0.22074,31M,77.66221195880156
+FHE_USDT,https://futures.mexc.com/exchange/FHE_USDT,ALTA,0.22308,25M,89.61254555219695
