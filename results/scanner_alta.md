@@ -1,16 +1,20 @@
 # Scanner ALTA (menor distância -> maior)
 
-- Gerado em UTC: 2026-01-21 01:24:35
+- Gerado em UTC: 2026-01-21 03:40:42
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
 |---|---:|---:|---:|---:|
-| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4822.5 | 195M | 2.746 |
-| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4848.47 | 109M | 2.894 |
-| [SILVER_USDT](https://futures.mexc.com/exchange/SILVER_USDT) | ALTA | 94.88 | 82M | 4.485 |
-| [ZRO_USDT](https://futures.mexc.com/exchange/ZRO_USDT) | ALTA | 1.877 | 8M | 5.411 |
-| [ROSE_USDT](https://futures.mexc.com/exchange/ROSE_USDT) | ALTA | 0.01685 | 8M | 13.387 |
-| [RESOLV_USDT](https://futures.mexc.com/exchange/RESOLV_USDT) | ALTA | 0.10516 | 8M | 20.891 |
-| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 34.247 | 34M | 35.189 |
-| [AXS_USDT](https://futures.mexc.com/exchange/AXS_USDT) | ALTA | 2.055 | 93M | 36.508 |
-| [FHE_USDT](https://futures.mexc.com/exchange/FHE_USDT) | ALTA | 0.22937 | 25M | 89.373 |
+| [PEPSTOCK_USDT](https://futures.mexc.com/exchange/PEPSTOCK_USDT) | ALTA | 148.81 | 10M | 0.685 |
+| [MEME_USDT](https://futures.mexc.com/exchange/MEME_USDT) | ALTA | 0.001186 | 8M | 2.378 |
+| [XAUT_USDT](https://futures.mexc.com/exchange/XAUT_USDT) | ALTA | 4849.2 | 234M | 3.020 |
+| [PAXG_USDT](https://futures.mexc.com/exchange/PAXG_USDT) | ALTA | 4867.07 | 129M | 3.155 |
+| [MANA_USDT](https://futures.mexc.com/exchange/MANA_USDT) | ALTA | 0.1624 | 9M | 3.186 |
+| [ZRO_USDT](https://futures.mexc.com/exchange/ZRO_USDT) | ALTA | 1.91 | 9M | 6.484 |
+| [NAORIS_USDT](https://futures.mexc.com/exchange/NAORIS_USDT) | ALTA | 0.05718 | 23M | 6.559 |
+| [SAND_USDT](https://futures.mexc.com/exchange/SAND_USDT) | ALTA | 0.14958 | 19M | 7.597 |
+| [XNY_USDT](https://futures.mexc.com/exchange/XNY_USDT) | ALTA | 0.003739 | 8M | 8.048 |
+| [ROSE_USDT](https://futures.mexc.com/exchange/ROSE_USDT) | ALTA | 0.01802 | 7M | 12.890 |
+| [BERA_USDT](https://futures.mexc.com/exchange/BERA_USDT) | ALTA | 0.9411 | 9M | 17.257 |
+| [RIVER_USDT](https://futures.mexc.com/exchange/RIVER_USDT) | ALTA | 36.811 | 33M | 36.314 |
+| [AXS_USDT](https://futures.mexc.com/exchange/AXS_USDT) | ALTA | 2.394 | 101M | 39.024 |
