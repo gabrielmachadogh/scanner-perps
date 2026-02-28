@@ -1,6 +1,6 @@
 # Scanner ALTA (menor distância -> maior)
 
-- Gerado em UTC: 2026-02-28 03:51:19
+- Gerado em UTC: 2026-02-28 04:52:35
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
