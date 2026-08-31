@@ -1,6 +1,6 @@
 # Scanner COMPLETO
 
-- Gerado em UTC: 2026-08-31 18:40:25
+- Gerado em UTC: 2026-08-31 23:34:41
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
