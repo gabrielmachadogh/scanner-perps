@@ -1,6 +1,6 @@
 # Scanner BAIXA (menor distância -> maior)
 
-- Gerado em UTC: 2026-09-26 18:57:10
+- Gerado em UTC: 2026-09-26 22:19:38
 - Timeframe: `2h` | MA: `sma 10/100` | Top perps: `80`
 
 | Par | Trend | Close | Volume (24h, USDT) | Dist (%) |
